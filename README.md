@@ -1,5 +1,4 @@
 python-django-gloebit
 =====================
 
-### Python module for accessing Gloebit's API, particularly in Django framework.
-
+### Python module for accessing [Gloebit](http://docs.gloebit.com/)'s API, particularly in Django framework.
