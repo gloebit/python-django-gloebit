@@ -26,8 +26,8 @@ A Merchant object provides the following methods:
 Typical flow for single-merchant service:
   1) Import gloebit module.
   2) Create Client_secrets object.
-  2) Create Merchant object using the Client_Secrets object.
-  3) Per-user:
+  3) Create Merchant object using the Client_Secrets object.
+  4) Per-user:
      a) Redirect user agent to Gloebit authorization URL (get URL
         from Merchant object).
      b) When Gloebit redirects user agent to redirect URI, give
