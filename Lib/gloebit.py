@@ -48,12 +48,22 @@ import time
 from urlparse import urlparse
 
 from oauth2client import clientsecrets, xsrfutil
-from oauth2client.client import flow_from_clientsecrets
+from oauth2client.client import OAuth2WebServerFlow
 
 from oauth2client import util
 
+GLOEBIT_SERVER = 'www.gloebit.com'
+GLOEBIT_SANDBOX = 'sandbox.gloebit.com'
+GLOEBIT_OAUTH2_AUTH_URI = 'https://%s/oauth2/authorize'
+GLOEBIT_OAUTH2_TOKEN_URI = 'https://%s/oauth2/access-token'
+GLOEBIT_ID_URI = 'https://%s/id/'
+GLOEBIT_TRANSACT_URI = 'https://%s/transact/'
+
 class Error(Exception):
     """Base error for this module."""
+
+class CrossSiteError(Error):
+    """XSRF state check in authorization failed."""
 
 class BadRequestError(Error):
     """Response error from Gloebit not 200.  Code returned in string."""
@@ -76,50 +86,107 @@ class TransactRequestError(TransactError):
 class TransactFailureError(TransactError):
     """Gloebit transact request was processed but returned success=False."""
 
-class _Server(object):
-    """Provides Gloebit server URIs.
+class Client_Secrets(object):
+    """Container for OAuth2 client secrets."""
 
-    The object extracts the server address from the client's secrets file,
-    which holds the Gloebit authorization and token URIs.  It creates the
-    resource URIs from that address.
+    @util.positional(3)
+    def __init__(self, client_id, client_secret,
+                 redirect_uri=None, auth_uri=None, token_uri=None,
+                 _sandbox=False):
+        """Create a Client_Secrets.
 
-    If we create a mechanism for pulling a client secrets file from the
-    server, this object's functionality will reverse, instead creating the
-    URIs from a provided hostname.
-    """
+        Args:
+          client_id: string, Merchant's OAuth key for Gloebit account.  Cut
+            and paste it from Merchant Tools page into the code using this
+            method directly (or put into a secrets JSON file).
+          client_secret: string, Merchant's OAuth secret for Gloebit account.
+            Cut and paste it along with the key.
+          redirect_uri: string, Absolute URL for application to handle
+            Gloebit callback with code.
+          auth_uri: string, URL for Gloebit authorization method.
+          token_uri: string, URL for Gloebit access token method.
+          _sandbox: Boolean, Set to True to use sandbox testing server.
+        """
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.redirect_uri = redirect_uri
+        self.auth_uri = auth_uri
+        self.token_uri = token_uri
 
-    def __init__(self, secrets_file):
-        client_type, client_info = clientsecrets.loadfile(secrets_file)
-        auth_uri = client_info['auth_uri']
-        parsed_auth_uri = urlparse(auth_uri)
+        if _sandbox:
+            self.auth_uri = GLOEBIT_OAUTH2_AUTH_URI % GLOEBIT_SANDBOX
+            self.token_uri = GLOEBIT_OAUTH2_TOKEN_URI % GLOEBIT_SANDBOX
+        else:
+            if auth_uri is None:
+                self.auth_uri = GLOEBIT_OAUTH2_AUTH_URI % GLOEBIT_SERVER
+            if token_uri is None:
+                self.token_uri = GLOEBIT_OAUTH2_TOKEN_URI % GLOEBIT_SERVER
 
-        self.hostname = parsed_auth_uri.hostname
+    @staticmethod
+    @util.positional(1)
+    def from_file(filename, cache=None, redirect_uri=None,_sandbox=False):
+        """Create a Client_Secrets from a clientsecrets JSON file.
 
-    def id_uri(self):
-        return 'https://' + self.hostname + '/id/'
+        Very closely resembles oauth2client.client.flow_from_clientsecrets().
+        """
+        client_type, client_info = clientsecrets.loadfile(filename, cache=cache)
+        constructor_kwargs = {
+            'redirect_uri': redirect_uri,
+            'auth_uri': client_info['auth_uri'],
+            'token_uri': client_info['token_uri'],
+            '_sandbox': _sandbox,
+        }
+        return Client_Secrets(client_info['client_id'],
+                              client_info['client_secret'],
+                              **contructor_kwargs)
 
-    def transact_uri(self):
-        return 'https://' + self.hostname + '/transact/'
+    @staticmethod
+    @util.positional(0)
+    def from_server(_sandbox=False):
+        """Create a Client_Secrets via the Gloebit server.
 
-
+        Not yet implemented.
+        """
+        pass
+        
 class Merchant(object):
     """Handles tasks for Gloebit merchants."""
 
-    @util.positional(3)
-    def __init__(self, secrets_file, redirect_uri,
-                 scope='id transact', secret_key=None):
+    @util.positional(2)
+    def __init__(self, client_secrets, scope='id transact',
+                 redirect_uri=None, secret_key=None):
+        """Create a Merchant that will use the given Client_Secrets.
 
-        self.server = _Server(secrets_file)
+        Args:
+          client_secrets: Client_Secrets, Merchant's Gloebit secrets.
+          scope: string, Space-separated set of Gloebit methods to request
+            authorization for.
+          redirect_uri: string, Absolute URL for application to handle
+            Gloebit callback with code.  Overrides the redirect_uri from
+            the Client_Secrets.
+          secret_key: string, Application's secret key; used for cross-site
+            forgery prevention, if provided.
 
-        self.secrets_file = secrets_file
-        self.redirect_uri = redirect_uri
+        Returns:
+          A Merchant ready for user authorization and Gloebit methods.
+        """
+        self.client_secrets = client_secrets
+        self.client_id = client_secrets.client_id
+        self.client_secret = client_secrets.client_secret
+        self.auth_uri = client_secrets.auth_uri
+        self.token_uri = client_secrets.token_uri
         self.scope = scope
+
+        self.redirect_uri = client_secrets.redirect_uri
+        if redirect_uri is not None:
+            self.redirect_uri = redirect_uri
 
         self.secret_key = secret_key
 
-        client_type, client_info = clientsecrets.loadfile(secrets_file)
-
-        self._client_id = client_info['client_id']
+        parsed_auth_uri = urlparse(self.auth_uri)
+        hostname = parsed_auth_uri.hostname
+        self.id_uri = GLOEBIT_ID_URI % hostname
+        self.transact_uri = GLOEBIT_TRANSACT_URI %hostname
 
     @util.positional(1)
     def user_authorization_url(self, user=None, redirect_uri=None):
@@ -135,14 +202,18 @@ class Merchant(object):
           1) Currently supports http URLs only.  Thus, a non-web-based
              application's callback URI might not work.
         """
-        if not redirect_uri:
+        if redirect_uri is None:
             redirect_uri = self.redirect_uri
 
-        self.flow = flow_from_clientsecrets(self.secrets_file,
-                                            self.scope,
-                                            redirect_uri=redirect_uri)
+        self.flow = OAuth2WebServerFlow(self.client_id,
+                                        self.client_secret,
+                                        self.scope,
+                                        redirect_uri=redirect_uri,
+                                        auth_uri=self.auth_uri,
+                                        token_uri=self.token_uri,
+                                        revoke_uri=None)
 
-        if user and self.secret_key:
+        if user and self.secret_key is not None:
             self.flow.params['state'] = \
                 xsrfutil.generate_token(self.secret_key, user)
 
@@ -171,7 +242,7 @@ class Merchant(object):
             if not xsrfutil.validate_token(self.secret_key,
                                            query_args['state'],
                                            user):
-                return HttpResponseBadRequest()
+                raise CrossSiteError
 
         # The Merchant object will not have a flow if the server is
         # restarted and the oauth2 callback is the first access!
@@ -206,7 +277,7 @@ class Merchant(object):
         # getting the uri from it and handling the request here?
         http = httplib2.Http()
         resp, response_json = http.request(
-            uri=self.server.id_uri(),
+            uri=self.id_uri,
             method='GET',
             headers={'Authorization': 'Bearer ' + access_token}
         )
@@ -255,7 +326,7 @@ class Merchant(object):
             'asset-cancel-hold-url':       None,
             'gloebit-balance-change':      item_price,
             'gloebit-recipient-user-name': None,
-            'consumer-key':                self._client_id,
+            'consumer-key':                self.client_id,
             'merchant-user-id':            username,
         }
 
@@ -265,7 +336,7 @@ class Merchant(object):
         # getting the uri from it and handling the request here?
         http = httplib2.Http()
         resp, response_json = http.request(
-            uri=self.server.transact_uri(),
+            uri=self.transact_uri,
             method='POST',
             headers={'Authorization': 'Bearer ' + access_token,
                      'Content-Type': 'application/json'},
