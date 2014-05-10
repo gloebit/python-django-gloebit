@@ -3,9 +3,9 @@
 Interactions are handled by Merchant class objects, one object per merchant.
 
 Merchant object initialization requires:
-  Secrets file: Pathname to a client secrets JSON file containing the
-    merchant's client ID and client secret (from the Gloebit Merchant
-    Tools page) and the Gloebit server's authorization and token URIs.
+  Client_Secrets: Object holding merchant's client secrets.  Created
+    with either the client key and secret (from Gloebit Merchant Tools
+    page) or a client secrets JSON file (containing same info and more).
   Redirect URI: URI for callback from Gloebit server with credential
     code following user authorization via Gloebit's authorization URI.
 
@@ -25,7 +25,8 @@ A Merchant object provides the following methods:
 
 Typical flow for single-merchant service:
   1) Import gloebit module.
-  2) Create Merchant object (with secrets file and redirect URI).
+  2) Create Client_secrets object.
+  2) Create Merchant object using the Client_Secrets object.
   3) Per-user:
      a) Redirect user agent to Gloebit authorization URL (get URL
         from Merchant object).
