@@ -145,7 +145,7 @@ class Client_Secrets(object):
         }
         return Client_Secrets(client_info['client_id'],
                               client_info['client_secret'],
-                              **contructor_kwargs)
+                              **constructor_kwargs)
 
     @staticmethod
     @util.positional(0)
