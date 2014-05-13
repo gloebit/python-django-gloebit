@@ -69,6 +69,12 @@ class CrossSiteError(Error):
 class BadRequestError(Error):
     """Response error from Gloebit not 200.  Code returned in string."""
 
+class FlowMissingError(Error):
+    """Attempted Step 2 Exchange but Merchant has no flow attribute.
+    Can happen if app is restarted while waiting for user authorization.
+    Need to redirect user back to step 1 when this occurs.
+    """
+
 class AccessTokenError(Error):
     """Error using access token (revoked or expired), reauthorize."""
 
@@ -248,7 +254,10 @@ class Merchant(object):
         # The Merchant object will not have a flow if the server is
         # restarted and the oauth2 callback is the first access!
         #
-        credential = self.flow.step2_exchange(query_args['code'])
+        try:
+            credential = self.flow.step2_exchange(query_args['code'])
+        except AttributeError:
+            raise FlowMissingError
 
         return credential
 
