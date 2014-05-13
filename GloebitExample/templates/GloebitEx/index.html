@@ -1,0 +1,7 @@
+{% if username %}
+<p>Hello, {{ username }}!</p>
+{% else %}
+<p>Hello?</p>
+<p>I should know your name but do not.  Something is terribly wrong...</p>
+{% endif %}
+<a href="{% url 'GloebitEx:logout' %}">Logout</a>
