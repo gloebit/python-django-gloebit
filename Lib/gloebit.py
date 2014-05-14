@@ -58,6 +58,7 @@ GLOEBIT_SANDBOX = 'sandbox.gloebit.com'
 GLOEBIT_OAUTH2_AUTH_URI = 'https://%s/oauth2/authorize'
 GLOEBIT_OAUTH2_TOKEN_URI = 'https://%s/oauth2/access-token'
 GLOEBIT_ID_URI = 'https://%s/id/'
+GLOEBIT_BALANCE_URI = 'https://%s/balance/'
 GLOEBIT_TRANSACT_URI = 'https://%s/transact/'
 
 class Error(Exception):
@@ -75,6 +76,9 @@ class FlowMissingError(Error):
     Need to redirect user back to step 1 when this occurs.
     """
 
+class MerchantScopeError(Error):
+    """Tried to invoke a Gloebit method not in the merchant's scope."""
+
 class AccessTokenError(Error):
     """Error using access token (revoked or expired), reauthorize."""
 
@@ -83,6 +87,9 @@ class UserInfoError(Error):
 
 class UserNameRequiredError(Error):
     """Error due to missing user name when 'id' is not in scope."""
+
+class BalanceAccessError(Error):
+    """Error trying to retrieve a Gloebit user's balance."""
 
 class TransactError(Error):
     """Base error for Gloebit Transact errors."""
@@ -193,7 +200,8 @@ class Merchant(object):
         parsed_auth_uri = urlparse(self.auth_uri)
         hostname = parsed_auth_uri.hostname
         self.id_uri = GLOEBIT_ID_URI % hostname
-        self.transact_uri = GLOEBIT_TRANSACT_URI %hostname
+        self.balance_uri = GLOEBIT_BALANCE_URI % hostname
+        self.transact_uri = GLOEBIT_TRANSACT_URI % hostname
 
     @util.positional(1)
     def user_authorization_url(self, user=None, redirect_uri=None):
@@ -263,23 +271,28 @@ class Merchant(object):
 
     @util.positional(2)
     def user_info(self, credential):
-        """Use credential to retreive Gloebit user information.
+        """Use credential to retrieve Gloebit user information.
 
         Args:
           credential: Oauth2Credentials object, Gloebit authorization credential
             acquired from 2-step authorization process (oauth2).
 
         Returns:
-          dictionary containing following key-value pairs:
+          Dictionary containing following key-value pairs:
             id: Gloebit unique identifier for user.
             name: User-selected character name for your merchant app.
             params: I don't know yet...
 
         Raises:
-          UserInfoError if the request returns a status other than 200.
+          MerchantScopeError if 'id' not in Merchant's scope.
+          BadRequestError if Gloebit returned any code other than 200.
+          AccessTokenError if access token has expired or is otherwise
+            invalid.
+          UserInfoError if Gloebit returned 200 status with False success and
+            a failure reason other than access token error.
         """
         if "id" not in self.scope:
-            return None
+            raise MerchantScopeError
 
         access_token = credential.access_token
 
@@ -298,6 +311,42 @@ class Merchant(object):
                  'name': response.get('name', None),
                  'params': response.get('params', None), }
 
+    @util.positional(2)
+    def user_balance(self, credential):
+        """Use credential to retrieve Gloebit user balance.
+
+        Args:
+          credential: Oauth2Credentials object, Gloebit authorization credential
+            acquired from 2-step authorization process (oauth2).
+
+        Returns:
+          User's balance as a float.
+
+        Raises:
+          MerchantScopeError if 'balance' not in Merchant's scope.
+          BadRequestError if Gloebit returned any HTTP status other than 200.
+          AccessTokenError if access token has expired or is otherwise
+            invalid.
+          BalanceAccessError if Gloebit returned 200 HTTP status with False
+            success and a failure reason other than access token error.
+        """
+        if "balance" not in self.scope:
+            raise MerchantScopeError
+
+        access_token = credential.access_token
+
+        # Should the Server object handle the http request instead of
+        # getting the uri from it and handling the request here?
+        http = httplib2.Http()
+        resp, response_json = http.request(
+            uri=self.balance_uri,
+            method='GET',
+            headers={'Authorization': 'Bearer ' + access_token}
+        )
+
+        response = _success_check(resp, response_json, BalanceAccessError)
+        return response['balance']
+
     @util.positional(4)
     def purchase(self, credential, item, item_price,
                  item_quantity=1, username=None):
@@ -314,9 +363,17 @@ class Merchant(object):
             use that in purchase request.  If not given and 'id' is not in
             merchant's Gloebit scope, an error will be raised.
 
+        Returns:
+          User's resulting balance as a float.
+
         Raises:
           UserNameRequiredError if 'id' not in merchant's scope and no
             username provided.
+          BadRequestError if Gloebit returned any HTTP status other than 200.
+          AccessTokenError if access token has expired or is otherwise
+            invalid.
+          TransactFailureError if Gloebit returned 200 HTTP status with False
+            success and a failure reason other than access token error.
         """
         if not username:
             if 'id' in self.scope.split():
@@ -353,7 +410,8 @@ class Merchant(object):
             body=json.dumps(transaction),
         )
 
-        _success_check(resp, response_json, TransactFailureError)
+        response = _success_check(resp, response_json, TransactFailureError)
+        return response['balance']
 
 
 def _success_check(resp, response_json, exception):
@@ -367,14 +425,20 @@ def _success_check(resp, response_json, exception):
 
     Args:
       resp: dictionary of response headers(?).
-      response_json: JSON from response body
+      response_json: JSON from response body.
+      exception: exception to raise for unknown failure reasons.
 
     Returns:
-          
-    Raises
+      Response dictionary from response_json.
+
+    Raises:
+      BadRequestError if Gloebit returned any HTTP status other than 200.
+      AccessTokenError if access token has expired or is otherwise invalid.
+      exception if Gloebit returned 200 HTTP status with False success and a
+        failure reason other than access token error.
     """
     if resp.status != 200:
-        raise BadRequestError("Gloebit returned " + str(resp.status) + " status!")
+        raise BadRequestError("Gloebit returned %s status!" % str(resp.status))
 
     response = json.loads(response_json)
             

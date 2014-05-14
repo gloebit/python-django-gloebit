@@ -3,6 +3,9 @@
 {% if message %}
   <p>{{ message }}</p>
 {% endif %}
+{% if balance %}
+  <p>Your balance is {{ balance }}G</p>
+{% endif %}
 <form action="{% url 'GloebitEx:purchase' %}" method="post">
 {% csrf_token %}
   <input type="hidden" name="size" value="small" />

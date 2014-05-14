@@ -21,6 +21,7 @@ CLIENT_SECRETS = os.path.join(os.path.dirname(__file__),
                               'client_secrets.json')
 
 MERCHANT = gloebit.Merchant(gloebit.Client_Secrets.from_file(CLIENT_SECRETS),
+                            scope='id balance transact',
                             secret_key=settings.SECRET_KEY)
 
 # Create your views here.
@@ -47,6 +48,7 @@ def gloebit_required(function):
 def index(request):
     context = {
         'username' : request.session.get('username', None),
+        'balance' : request.session.get('balance', 0.0),
         'message' : request.session.get('message', None),
     }
     request.session['message'] = None
@@ -63,7 +65,8 @@ def purchase(request):
     credential = storage.get()
 
     try:
-        MERCHANT.purchase(credential, item, price)
+        balance = MERCHANT.purchase(credential, item, price)
+        request.session['balance'] = balance
     except gloebit.AccessTokenError as e:
         request.session['message'] = "Stale token!  Logout and enter again"
     else:
