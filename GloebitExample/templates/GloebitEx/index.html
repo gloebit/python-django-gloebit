@@ -1,7 +1,16 @@
 {% if username %}
 <p>Hello, {{ username }}!</p>
+{% if message %}
+  <p>{{ message }}</p>
+{% endif %}
+<form action="{% url 'GloebitEx:purchase' %}" method="post">
+{% csrf_token %}
+  <input type="hidden" name="size" value="small" />
+  <input type="submit" value="Purchase small item" />
+</form>
 {% else %}
 <p>Hello?</p>
-<p>I should know your name but do not.  Something is terribly wrong...</p>
+<p>I should know your name but do not.
+  Something is terribly wrong...</p>
 {% endif %}
 <a href="{% url 'GloebitEx:logout' %}">Logout</a>

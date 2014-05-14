@@ -8,6 +8,7 @@ from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from django.contrib.auth.decorators import login_required
 from django.core.urlresolvers import reverse
+from django.views.decorators.http import require_POST
 
 from mysite import settings
 
@@ -46,8 +47,29 @@ def gloebit_required(function):
 def index(request):
     context = {
         'username' : request.session.get('username', None),
+        'message' : request.session.get('message', None),
     }
+    request.session['message'] = None
     return render(request, 'GloebitEx/index.html', context)
+
+@require_POST
+@gloebit_required
+def purchase(request):
+    item = request.POST['size'] + " item"
+    price = 1
+
+    username = request.session.get('username', None)
+    storage = Storage(CredentialModel, 'user', username, 'credential')
+    credential = storage.get()
+
+    try:
+        MERCHANT.purchase(credential, item, price)
+    except gloebit.AccessTokenError as e:
+        request.session['message'] = "Stale token!  Logout and enter again"
+    else:
+        request.session['message'] = "You bought a " + item
+
+    return HttpResponseRedirect(reverse('GloebitEx:index'))
 
 def gloebit_callback(request):
     credential = MERCHANT.exchange_for_user_credential(request.GET)
@@ -65,6 +87,6 @@ def logout(request):
     username = request.session.get('username', None)
     if username is not None:
         storage = Storage(CredentialModel, 'user', username, 'credential')
-        storage.put(None)
+        storage.delete()
         request.session['username'] = None
     return HttpResponseRedirect('/')
