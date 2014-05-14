@@ -364,7 +364,8 @@ class Merchant(object):
             merchant's Gloebit scope, an error will be raised.
 
         Returns:
-          User's resulting balance as a float.
+          User's resulting balance as a float if 'balance' is in Merchant's
+            scope.
 
         Raises:
           UserNameRequiredError if 'id' not in merchant's scope and no
@@ -411,7 +412,9 @@ class Merchant(object):
         )
 
         response = _success_check(resp, response_json, TransactFailureError)
-        return response['balance']
+
+        if 'balance' in response:
+            return response['balance']
 
 
 def _success_check(resp, response_json, exception):
