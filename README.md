@@ -41,4 +41,14 @@ gloebit.Merchant API
 
 Returns the URL to initiate a Gloebit authorization request.  The first step in acquiring a Gloebit access token for a user is to redirect the user to this URL.  Redirecting the user to it will lead to a Gloebit login page (if necessary) and a merchant-approval page.  When the user approves your merchant access, Gloebit will redirect the user to your application's redirect URI with the authorization code attached as a query argument.  Handling this callback is the second step in acquiring the access token (see exchange_for_user_credential below).
 
-A user argument is necessary (along with your application's secret key when creating the Merchant object) to add a 'state' nonce to the URL for CSRF detection.
+You can provide your application's redirect URI with this call or when creating your Merchant object.  This method provides the optional redirect_uri argument in case your application framework cannot determine the absolute URI when the modules are initialized.  Note that the redirect URI must be absolute due to the authorization URL redirect to a Gloebit server.
+
+The user argument is necessary (along with your application's secret key when creating the Merchant object) to add a 'state' nonce to the authorization URL for CSRF detection.  It is your application's name (or uuid) for the user.  Your applciation can get the user's Gloebit name (for your merchant account) after acquiring an access token--see user_info below.
+
+### exchange_for_user_credential
+
+```python
+    exchange_for_user_credential(query_args, user=None)
+```
+
+Exchanges the Gloebit auhtorization code returned to the redirect URI for the user's Gloebit credential.
