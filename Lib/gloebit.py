@@ -348,9 +348,89 @@ class Merchant(object):
         return response['balance']
 
     @util.positional(4)
-    def purchase(self, credential, item, item_price,
-                 item_quantity=1, username=None):
-        """Use credential to buy item at item_price via Gloebit.
+    def purchase_item(self, credential, item, item_price,
+                      item_quantity=1, username=None):
+        """Use credential to buy untracked item at item_price via Gloebit.
+
+        This method is for purchasing an item that the merchant has not
+        added to the merchant's product list on Gloebit.  Thus, it requires
+        the item description and price (in Gloebits).
+
+        To purchase from the merchant's product list, use purchase_product().
+
+        Args:
+          credential: Oauth2Credentials object, Gloebit authorization credential
+            acquired from 2-step authorization process (oauth2).
+          item: string, Merchant's description of item being purchased.
+          item_price: integer, Price in G$ for each item.
+          item_quantity: integer, Number of items to purchase.
+          username: string, Merchant's ID/name for purchaser.  If not given and
+            'id' is in merchant's Gloebit scope, will look up user's name and
+            use that in purchase request.  If not given and 'id' is not in
+            merchant's Gloebit scope, an error will be raised.
+
+        Returns:
+          User's resulting balance as a float if 'balance' is in Merchant's
+            scope.
+
+        Raises:
+          UserNameRequiredError if 'id' not in merchant's scope and no
+            username provided.
+          BadRequestError if Gloebit returned any HTTP status other than 200.
+          AccessTokenError if access token has expired or is otherwise
+            invalid.
+          TransactFailureError if Gloebit returned 200 HTTP status with False
+            success and a failure reason other than access token error.
+        """
+        if not username:
+            if 'id' in self.scope.split():
+                userinfo = self.user_info(credential)
+                username = userinfo['name']
+            else:
+                raise UserNameRequiredError
+
+        transaction = {
+            'version':                     1,
+            'id':                          str(uuid.uuid4()),
+            'request-created':             int(time.time()),
+            'asset-code':                  item,
+            'asset-quantity':              item_quantity,
+            'asset-enact-hold-url':        None,
+            'asset-consume-hold-url':      None,
+            'asset-cancel-hold-url':       None,
+            'gloebit-balance-change':      item_price,
+            'gloebit-recipient-user-name': None,
+            'consumer-key':                self.client_id,
+            'merchant-user-id':            username,
+        }
+
+        access_token = credential.access_token
+
+        # Should the Server object handle the http request instead of
+        # getting the uri from it and handling the request here?
+        http = httplib2.Http()
+        resp, response_json = http.request(
+            uri=self.transact_uri,
+            method='POST',
+            headers={'Authorization': 'Bearer ' + access_token,
+                     'Content-Type': 'application/json'},
+            body=json.dumps(transaction),
+        )
+
+        response = _success_check(resp, response_json, TransactFailureError)
+
+        if 'balance' in response:
+            return response['balance']
+
+    @util.positional(3)
+    def purchase_product(self, credential, product,
+                         product_quantity=1, username=None):
+        """Use credential to buy product via Gloebit.
+
+        This method is for purchasing a product that the merchant has added
+        to the merchant's product list on Gloebit.
+
+        To purchase an untracked item, use purchase_item().
 
         Args:
           credential: Oauth2Credentials object, Gloebit authorization credential
