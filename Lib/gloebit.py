@@ -435,9 +435,9 @@ class Merchant(object):
         Args:
           credential: Oauth2Credentials object, Gloebit authorization credential
             acquired from 2-step authorization process (oauth2).
-          item: string, Merchant's description of item being purchased.
-          item_price: integer, Price in G$ for each item.
-          item_quantity: integer, Number of items to purchase.
+          product: string, Merchant's name for product being purchased.  Needs
+            to match name on merchant products page.
+          product_quantity: integer, Product quantity to purchase.
           username: string, Merchant's ID/name for purchaser.  If not given and
             'id' is in merchant's Gloebit scope, will look up user's name and
             use that in purchase request.  If not given and 'id' is not in
@@ -467,12 +467,11 @@ class Merchant(object):
             'version':                     1,
             'id':                          str(uuid.uuid4()),
             'request-created':             int(time.time()),
-            'asset-code':                  item,
-            'asset-quantity':              item_quantity,
-            'asset-enact-hold-url':        None,
-            'asset-consume-hold-url':      None,
-            'asset-cancel-hold-url':       None,
-            'gloebit-balance-change':      item_price,
+            'product':                     product,
+            'product-quantity':            product_quantity,
+            # 'asset-enact-hold-url':        None,
+            # 'asset-consume-hold-url':      None,
+            # 'asset-cancel-hold-url':       None,
             'gloebit-recipient-user-name': None,
             'consumer-key':                self.client_id,
             'merchant-user-id':            username,
