@@ -51,4 +51,27 @@ The user argument is necessary (along with your application's secret key when cr
     exchange_for_user_credential(query_args, user=None)
 ```
 
-Exchanges the Gloebit auhtorization code returned to the redirect URI for the user's Gloebit credential.
+Exchanges the Gloebit auhtorization code returned to the redirect URI for the user's Gloebit credential and returns the credential.  The code is sent as a query parameter, as is the 'state' nonce for CSRF detection.  Pass the query dictionary to this method.
+
+If query_args includes a 'state' value, the method verifies it against the application's secret key and user.  The user passed to this method must match the user_authorization_url user.
+
+### user_info
+
+```python
+    user_info(credential)
+```
+
+Can be invoked only if 'id' is in your merchant scope (Gloebit domain).
+
+Returns a dictionary of Gloebit user information for the user.  Requires the user credential acquired via the 2-step OAuth 2.0 flow.
+
+The dictionary contains 'id', 'name', and 'params' values.  The 'id' is the user Gloebit UUID and the 'name' is the user's selected name for your application.
+
+### user_balance
+
+### purchase_item
+
+### purchase_product
+
+Gloebit Django Example
+======================
