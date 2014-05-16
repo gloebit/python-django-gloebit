@@ -12,7 +12,8 @@ from django.views.decorators.http import require_POST
 
 from mysite import settings
 
-from gloebitexample.models import CredentialModel
+# from gloebitexample.models import CredentialModel
+from models import CredentialModel
 
 import gloebit
 
@@ -56,7 +57,7 @@ def index(request):
 
 @require_POST
 @gloebit_required
-def purchase(request):
+def purchase_item(request):
     item = request.POST['size'] + " item"
     price = 1
 
@@ -65,7 +66,7 @@ def purchase(request):
     credential = storage.get()
 
     try:
-        balance = MERCHANT.purchase(credential, item, price)
+        balance = MERCHANT.purchase_item(credential, item, price)
         request.session['balance'] = balance
     except gloebit.AccessTokenError as e:
         request.session['message'] = "Stale token!  Logout and enter again"
