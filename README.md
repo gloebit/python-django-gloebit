@@ -1,7 +1,8 @@
 python-django-gloebit
 =====================
 
-### Python module for accessing [Gloebit](http://docs.gloebit.com/)'s API and an example Django application using the Gloebit module.
+### Python module for accessing [Gloebit](http://docs.gloebit.com/)'s API
+#### Plus, an example Django application using the Gloebit module.
 
 The Gloebit python module supports many of the Gloebit user endpoints.
 All user endpoints require an access token that the application must first acquire.
