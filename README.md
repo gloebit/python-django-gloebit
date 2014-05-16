@@ -2,7 +2,7 @@ python-django-gloebit
 =====================
 
 ### Python module for accessing [Gloebit](http://docs.gloebit.com/)'s API
-#### Plus, an example Django application using the Gloebit module.
+#### Plus, an example Django app that uses the Gloebit module.
 
 The Gloebit python module supports many of the Gloebit user endpoints.
 All user endpoints require an access token that the application must first acquire.
@@ -107,5 +107,7 @@ A username is required if 'id' is not in your merchant scope, otherwise the user
 
 Refer to the method document string for exceptions purchase_product can raise.
 
-Gloebit Django Example
-======================
+Gloebit Django App Example
+==========================
+
+You can find the example Django app in the GloebitExample directory.  It consists of the usual models.py, urls.py, and views.py files and a templates directory.
