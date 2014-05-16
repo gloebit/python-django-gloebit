@@ -374,6 +374,7 @@ class Merchant(object):
             scope.
 
         Raises:
+          MerchantScopeError if 'transact' not in merchant's scope.
           UserNameRequiredError if 'id' not in merchant's scope and no
             username provided.
           BadRequestError if Gloebit returned any HTTP status other than 200.
@@ -382,6 +383,9 @@ class Merchant(object):
           TransactFailureError if Gloebit returned 200 HTTP status with False
             success and a failure reason other than access token error.
         """
+        if "transact" not in self.scope:
+            raise MerchantScopeError
+
         if not username:
             if 'id' in self.scope.split():
                 userinfo = self.user_info(credential)
@@ -448,6 +452,7 @@ class Merchant(object):
             scope.
 
         Raises:
+          MerchantScopeError if 'transact' not in merchant's scope.
           UserNameRequiredError if 'id' not in merchant's scope and no
             username provided.
           BadRequestError if Gloebit returned any HTTP status other than 200.
@@ -456,6 +461,9 @@ class Merchant(object):
           TransactFailureError if Gloebit returned 200 HTTP status with False
             success and a failure reason other than access token error.
         """
+        if "transact" not in self.scope:
+            raise MerchantScopeError
+
         if not username:
             if 'id' in self.scope.split():
                 userinfo = self.user_info(credential)
