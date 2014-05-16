@@ -24,10 +24,11 @@ As a Gloebit merchant, you have an OAuth client key and an OAuth client secret. 
                                             _sandbox=True)
 ```
 
-Next, create your Merchant object that will provide your Gloebit API.  Your application's secret key is necessary to generate a 'state' nonce (in the authorization request) for CSRF detection.
+Next, create your Merchant object that will provide your Gloebit API.  Provide a scope specifying which endpoints you need to access, default is 'id' and 'transact'.  Your application's secret key is necessary to generate a 'state' nonce (in the authorization request) for CSRF detection.
 
 ```python
-    MERCHANT = gloebit.Merchant(CLIENT_SECRETS, secret_key=your_app_secret_key)
+    MERCHANT = gloebit.Merchant(CLIENT_SECRETS, scope='id balance transact',
+                                secret_key=your_app_secret_key)
 ```
 
 gloebit.Merchant API
@@ -61,7 +62,7 @@ If query_args includes a 'state' value, the method verifies it against the appli
     user_info(credential)
 ```
 
-Can be invoked only if 'id' is in your merchant scope (Gloebit domain).
+Can be invoked only if 'id' is in your merchant scope.
 
 Returns a dictionary of Gloebit user information for the user.  Requires the user credential acquired via the 2-step OAuth 2.0 flow.
 
@@ -69,9 +70,41 @@ The dictionary contains 'id', 'name', and 'params' values.  The 'id' is the user
 
 ### user_balance
 
+```python
+    user_balance(credential)
+```
+
+Can be invoked only if 'balance' is in your merchant scope.
+
+Returns a float of the user's Gloebit balance.  Requires the user credential acquired via the 2-step OAuth 2.0 flow.
+
 ### purchase_item
 
+```python
+    purchase_item(credential, item, item_price, item_quantity=1, username=None)
+```
+
+Can be invoked only if 'transact' is in your merchant scope.
+
+Requests a transaction for an application-named item (as opposed to a merchant-named product in the Gloebit system, see below) of item_quantity number at item_price gloebits.  Requires the user credential acquired via the 2-step OAuth 2.0 flow.  Also requires sufficient user balance.
+
+A username is required if 'id' is not in your merchant scope, otherwise the user's merchant name will be used.  The username shows up in the merchant transaction log for the purchase.
+
+Refer to the method document string for exceptions purchase_item can raise.
+
 ### purchase_product
+
+```python
+    purchase_product(credential, product, product_quantity=1, username=None)
+```
+
+Can be invoked only if 'transact' is in your merchant scope.
+
+Requests a transaction for a merchant-named product (as opposed to an item named on-the-fly by your application, see above) of product_quantity number.  (You set the price on your Merchant Products Gloebit page.)  Requires the user credential acquired via the 2-step OAuth 2.0 flow.  Also requires sufficient user balance.
+
+A username is required if 'id' is not in your merchant scope, otherwise the user's merchant name will be used.  The username shows up in the merchant transaction log for the purchase.
+
+Refer to the method document string for exceptions purchase_product can raise.
 
 Gloebit Django Example
 ======================
