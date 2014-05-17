@@ -104,7 +104,7 @@ def product_action(request):
             balance, count = MERCHANT.purchase_product(credential, product)
             request.session['balance'] = balance
             request.session['inventory'][product] = count
-            request.session['message'] = "You bought a %s." 5 product
+            request.session['message'] = "You bought a %s." % product
         else:
             count = MERCHANT.consume_product(credential, product)
             request.session['inventory'][product] = count
