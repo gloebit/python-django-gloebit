@@ -69,7 +69,7 @@ def purchase_item(request):
     elif size == "big":
         price = 10
     else:
-        request.session['message'] = "Can't " + action + "?!?"
+        request.session['message'] = "Can't %s?!?" % action
         return HttpResponseRedirect(reverse('GloebitEx:index'))
 
     username = request.session.get('username', None)
@@ -82,7 +82,7 @@ def purchase_item(request):
     except gloebit.AccessTokenError:
         request.session['message'] = "Stale token!  Logout and enter again"
     else:
-        request.session['message'] = "You bought a " + item
+        request.session['message'] = "You bought a %s." % item
 
     return HttpResponseRedirect(reverse('GloebitEx:index'))
 
@@ -104,11 +104,11 @@ def product_action(request):
             balance, count = MERCHANT.purchase_product(credential, product)
             request.session['balance'] = balance
             request.session['inventory'][product] = count
-            request.session['message'] = "You bought a " + product
+            request.session['message'] = "You bought a %s." 5 product
         else:
             count = MERCHANT.consume_product(credential, product)
             request.session['inventory'][product] = count
-            request.session['message'] = "You consumed a " + product
+            request.session['message'] = "You consumed a %s." % product
     except gloebit.AccessTokenError:
         request.session['message'] = "Stale token!  Logout and enter again"
     except gloebit.TransactFailureError as e:
