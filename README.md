@@ -91,6 +91,9 @@ Requests a transaction for an application-named item (as opposed to a merchant-n
 
 A username is required if 'id' is not in your merchant scope, otherwise the user's merchant name will be used.  The username shows up in the merchant transaction log for the purchase.
 
+Returns the user's resulting balance.  The balance will be None if your
+merchant scope does not include 'balance'.
+
 Refer to the method document string for exceptions purchase_item can raise.
 
 ### purchase_product
@@ -105,7 +108,26 @@ Requests a transaction for a merchant-named product (as opposed to an item named
 
 A username is required if 'id' is not in your merchant scope, otherwise the user's merchant name will be used.  The username shows up in the merchant transaction log for the purchase.
 
+Returns a tuple of the user's resulting balance and product count (for the
+purchase product only.  The balance will be None if your merchant scope does
+not include 'balance'.  The count will be None if your merchant scope does
+non include 'inventory'.
+
 Refer to the method document string for exceptions purchase_product can raise.
+
+### consume_product
+
+```python
+    consume_product(credential, product, product_quantity=1)
+```
+
+Requests "consumption" of the user's (merchant-named) product.  The product
+name must match a name from your merchant products page.  User's inventory
+must contain at least as many as the quantity.  User's product count is
+reduced by the quantity.
+
+Returns the user's resulting product count (for that product only).  The count
+will be None if your merchant scope does not include 'inventory'.
 
 Gloebit Django App Example
 ==========================

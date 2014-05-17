@@ -1,15 +1,25 @@
 {% if username %}
-<p>Hello, {{ username }}!</p>
+<h2>Hello, {{ username }}</h2>
 {% if message %}
-  <p>{{ message }}</p>
+  <h3>{{ message }}</h3>
 {% endif %}
 {% if balance %}
   <p>Your balance is {{ balance }}G</p>
 {% endif %}
 <form action="{% url 'GloebitEx:purchase_item' %}" method="post">
 {% csrf_token %}
-  <input type="hidden" name="size" value="small" />
-  <input type="submit" value="Purchase small item" />
+  <input type="submit" name="action" value="Buy a tiny item" />
+  <input type="submit" name="action" value="Buy a small item" />
+  <input type="submit" name="action" value="Buy a big item" />
+</form>
+<form action="{% url 'GloebitEx:product_action' %}" method="post">
+{% csrf_token %}
+  {% for product,count in products.items %}
+    <input type="radio" name="product" id="{{ product }}" value="{{ product }}" />
+    <label for="{{ product }}">{{ product }}</label> -- You have {{ count }} remaining<br />
+  {% endfor %}
+  <input type="submit" name="action" value="Purchase product" />
+  <input type="submit" name="action" value="Consume product" />
 </form>
 {% else %}
 <p>Hello?</p>

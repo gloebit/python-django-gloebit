@@ -42,6 +42,7 @@ Typical flow for single-merchant service:
 ###   * Improve XSRF checking when exchanging code for credential.
 
 import httplib2
+import urllib
 import json
 import uuid
 import time
@@ -59,7 +60,9 @@ GLOEBIT_OAUTH2_AUTH_URI = 'https://%s/oauth2/authorize'
 GLOEBIT_OAUTH2_TOKEN_URI = 'https://%s/oauth2/access-token'
 GLOEBIT_ID_URI = 'https://%s/id/'
 GLOEBIT_BALANCE_URI = 'https://%s/balance/'
+GLOEBIT_PRODUCTS_URI = 'https://%s/get-user-products/'
 GLOEBIT_TRANSACT_URI = 'https://%s/transact/'
+GLOEBIT_CONSUME_URI = 'https://%s/consume-user-product/%s/%s/'
 
 class Error(Exception):
     """Base error for this module."""
@@ -90,6 +93,10 @@ class UserNameRequiredError(Error):
 
 class BalanceAccessError(Error):
     """Error trying to retrieve a Gloebit user's balance."""
+
+class ProductsAccessError(Error):
+    """Error trying to retrieve a Gloebit user's product inventory or
+    consume a Gloebit user's products."""
 
 class TransactError(Error):
     """Base error for Gloebit Transact errors."""
@@ -201,7 +208,15 @@ class Merchant(object):
         hostname = parsed_auth_uri.hostname
         self.id_uri = GLOEBIT_ID_URI % hostname
         self.balance_uri = GLOEBIT_BALANCE_URI % hostname
+        self.products_uri = GLOEBIT_PRODUCTS_URI % hostname
         self.transact_uri = GLOEBIT_TRANSACT_URI % hostname
+
+        self._hostname = hostname
+
+    @util.positional(3)
+    def _consume_uri(self, product, count):
+        q_product = urllib.quote(product)
+        return GLOEBIT_CONSUME_URI % (self._hostname, q_product, count)
 
     @util.positional(1)
     def user_authorization_url(self, user=None, redirect_uri=None):
@@ -296,8 +311,6 @@ class Merchant(object):
 
         access_token = credential.access_token
 
-        # Should the Server object handle the http request instead of
-        # getting the uri from it and handling the request here?
         http = httplib2.Http()
         resp, response_json = http.request(
             uri=self.id_uri,
@@ -335,8 +348,6 @@ class Merchant(object):
 
         access_token = credential.access_token
 
-        # Should the Server object handle the http request instead of
-        # getting the uri from it and handling the request here?
         http = httplib2.Http()
         resp, response_json = http.request(
             uri=self.balance_uri,
@@ -346,6 +357,40 @@ class Merchant(object):
 
         response = _success_check(resp, response_json, BalanceAccessError)
         return response['balance']
+
+    @util.positional(2)
+    def user_products(self, credential):
+        """Use credential to retrieve Gloebit user product inventory.
+
+        Args:
+          credential: Oauth2Credentials object, Gloebit authorization credential
+            acquired from 2-step authorization process (oauth2).
+
+        Returns:
+          User's product inventory as a dictionary.
+
+        Raises:
+          MerchantScopeError if 'inventory' not in Merchant's scope.
+          BadRequestError if Gloebit returned any HTTP status other than 200.
+          AccessTokenError if access token has expired or is otherwise
+            invalid.
+          ProductsAccessError if Gloebit returned 200 HTTP status with False
+            success and a failure reason other than access token error.
+        """
+        if "inventory" not in self.scope:
+            raise MerchantScopeError
+
+        access_token = credential.access_token
+
+        http = httplib2.Http()
+        resp, response_json = http.request(
+            uri=self.products_uri,
+            method='GET',
+            headers={'Authorization': 'Bearer ' + access_token}
+        )
+
+        response = _success_check(resp, response_json, ProductsAccessError)
+        return response['products']
 
     @util.positional(4)
     def purchase_item(self, credential, item, item_price,
@@ -370,8 +415,8 @@ class Merchant(object):
             merchant's Gloebit scope, an error will be raised.
 
         Returns:
-          User's resulting balance as a float if 'balance' is in Merchant's
-            scope.
+          User's resulting balance as a float.  If 'balance' is not in
+            Merchant's, balance will be None.
 
         Raises:
           MerchantScopeError if 'transact' not in merchant's scope.
@@ -410,8 +455,6 @@ class Merchant(object):
 
         access_token = credential.access_token
 
-        # Should the Server object handle the http request instead of
-        # getting the uri from it and handling the request here?
         http = httplib2.Http()
         resp, response_json = http.request(
             uri=self.transact_uri,
@@ -423,8 +466,7 @@ class Merchant(object):
 
         response = _success_check(resp, response_json, TransactFailureError)
 
-        if 'balance' in response:
-            return response['balance']
+        return response.get('balance', None)
 
     @util.positional(3)
     def purchase_product(self, credential, product,
@@ -448,8 +490,10 @@ class Merchant(object):
             merchant's Gloebit scope, an error will be raised.
 
         Returns:
-          User's resulting balance as a float if 'balance' is in Merchant's
-            scope.
+          A tuple of the user's resulting balance as a float and the user's
+            new product count after the purchase, as an int.  If 'balance'
+            is not in Merchant's scope, balance will be None.  If 'inventory'
+            is not in Merchant's scope, the count will be None.
 
         Raises:
           MerchantScopeError if 'transact' not in merchant's scope.
@@ -487,8 +531,6 @@ class Merchant(object):
 
         access_token = credential.access_token
 
-        # Should the Server object handle the http request instead of
-        # getting the uri from it and handling the request here?
         http = httplib2.Http()
         resp, response_json = http.request(
             uri=self.transact_uri,
@@ -500,9 +542,54 @@ class Merchant(object):
 
         response = _success_check(resp, response_json, TransactFailureError)
 
-        if 'balance' in response:
-            return response['balance']
+        balance = response.get('balance', None)
+        remaining = response.get('product-count', None)
+        return (balance, remaining)
 
+    @util.positional(3)
+    def consume_product(self, credential, product, product_quantity=1):
+        """Use credential to consume user's product(s) via Gloebit.
+
+        This method is for consuming (deleting) one or more of a product that
+        the user previously purchased on Gloebit
+
+        Args:
+          credential: Oauth2Credentials object, Gloebit authorization credential
+            acquired from 2-step authorization process (oauth2).
+          product: string, Merchant's name for product being purchased.  Needs
+            to match name on merchant products page.
+          product_quantity: integer, Product quantity to purchase.
+
+        Returns:
+          User's new product count after consumption, as an int.
+
+        Raises:
+          MerchantScopeError if 'inventory' not in merchant's scope.
+          BadRequestError if Gloebit returned any HTTP status other than 200.
+          AccessTokenError if access token has expired or is otherwise
+            invalid.
+          ProductsAccessError if Gloebit returned 200 HTTP status with False
+            success and a failure reason other than access token error.
+        """
+        if "inventory" not in self.scope:
+            raise MerchantScopeError
+
+        access_token = credential.access_token
+        transaction = {}
+
+        http = httplib2.Http()
+        resp, response_json = http.request(
+            uri=self._consume_uri(product, product_quantity),
+            method='POST',
+            headers={'Authorization': 'Bearer ' + access_token,
+                     'Content-Type': 'application/json'},
+            body=json.dumps(transaction),
+        )
+
+        response = _success_check(resp, response_json, ProductsAccessError)
+        print "response: " + str(response)
+
+        return response.get('product-count', None)
 
 def _success_check(resp, response_json, exception):
     """Check response and body for success or failure.

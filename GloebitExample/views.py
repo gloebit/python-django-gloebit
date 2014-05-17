@@ -22,7 +22,7 @@ CLIENT_SECRETS = os.path.join(os.path.dirname(__file__),
                               'client_secrets.json')
 
 MERCHANT = gloebit.Merchant(gloebit.Client_Secrets.from_file(CLIENT_SECRETS),
-                            scope='id balance transact',
+                            scope='id balance inventory transact',
                             secret_key=settings.SECRET_KEY)
 
 # Create your views here.
@@ -50,6 +50,7 @@ def index(request):
     context = {
         'username' : request.session.get('username', None),
         'balance' : request.session.get('balance', 0.0),
+        'products' : request.session.get('inventory', None),
         'message' : request.session.get('message', None),
     }
     request.session['message'] = None
@@ -58,8 +59,18 @@ def index(request):
 @require_POST
 @gloebit_required
 def purchase_item(request):
-    item = request.POST['size'] + " item"
-    price = 1
+    action = request.POST['action']
+    item = action[6:]
+    size = item.split()[0]
+    if size == "tiny":
+        price = 1
+    elif size == "small":
+        price = 3
+    elif size == "big":
+        price = 10
+    else:
+        request.session['message'] = "Can't " + action + "?!?"
+        return HttpResponseRedirect(reverse('GloebitEx:index'))
 
     username = request.session.get('username', None)
     storage = Storage(CredentialModel, 'user', username, 'credential')
@@ -68,10 +79,49 @@ def purchase_item(request):
     try:
         balance = MERCHANT.purchase_item(credential, item, price)
         request.session['balance'] = balance
-    except gloebit.AccessTokenError as e:
+    except gloebit.AccessTokenError:
         request.session['message'] = "Stale token!  Logout and enter again"
     else:
         request.session['message'] = "You bought a " + item
+
+    return HttpResponseRedirect(reverse('GloebitEx:index'))
+
+@require_POST
+@gloebit_required
+def product_action(request):
+    if 'product' not in request.POST:
+        request.session['message'] = "You did not pick a product!"
+        return HttpResponseRedirect(reverse('GloebitEx:index'))
+
+    product = request.POST['product']
+
+    username = request.session.get('username', None)
+    storage = Storage(CredentialModel, 'user', username, 'credential')
+    credential = storage.get()
+
+    try:
+        if request.POST['action'] == "Purchase product":
+            balance, count = MERCHANT.purchase_product(credential, product)
+            request.session['balance'] = balance
+            request.session['inventory'][product] = count
+            request.session['message'] = "You bought a " + product
+        else:
+            count = MERCHANT.consume_product(credential, product)
+            request.session['inventory'][product] = count
+            request.session['message'] = "You consumed a " + product
+    except gloebit.AccessTokenError:
+        request.session['message'] = "Stale token!  Logout and enter again"
+    except gloebit.TransactFailureError as e:
+        if str(e) == "canceled":
+            request.session['message'] = "Purchase canceled.  Try consuming."
+        else:
+            request.session['message'] = "Purchase canceled: " + str(e)
+    except gloebit.ProductsAccessError as e:
+        if str(e) == "user doesn't have enough":
+            request.session['message'] = \
+                "You don't have a %s to consume!" % product
+        else:
+            request.session['message'] = "Product failure: " + str(e)
 
     return HttpResponseRedirect(reverse('GloebitEx:index'))
 
@@ -83,7 +133,11 @@ def gloebit_callback(request):
     request.session['username'] = username
 
     storage = Storage(CredentialModel, 'user', username, 'credential')
+    storage.delete()  # Get rid of stale token, if any
     storage.put(credential)
+
+    inventory = MERCHANT.user_products(credential)
+    request.session['inventory'] = inventory
 
     return HttpResponseRedirect(reverse('GloebitEx:index'))
 
