@@ -1,5 +1,6 @@
 
 import os
+import uuid
 from functools import wraps
 
 from oauth2client.django_orm import Storage
@@ -21,9 +22,9 @@ CLIENT_SECRETS = os.path.join(os.path.dirname(__file__),
                               '..',
                               'client_secrets.json')
 
-MERCHANT = gloebit.Merchant(gloebit.Client_Secrets.from_file(CLIENT_SECRETS),
-                            scope='id balance inventory transact',
-                            secret_key=settings.SECRET_KEY)
+MERCHANT = gloebit.Gloebit(gloebit.ClientSecrets.from_file(CLIENT_SECRETS),
+                           scope='user balance inventory transact',
+                           secret_key=settings.SECRET_KEY)
 
 # Create your views here.
 
@@ -128,10 +129,16 @@ def product_action(request):
 def gloebit_callback(request):
     credential = MERCHANT.exchange_for_user_credential(request.GET)
 
-    gbinfo = MERCHANT.user_info(credential)
-    username = gbinfo['name']
-    request.session['username'] = username
+    if 'user' in MERCHANT.scope:
+        gbinfo = MERCHANT.user_info(credential)
+        print "gbinfo: %s\n" % str(gbinfo)
+        username = gbinfo['name']
+        request.session['username'] = username
+    else:
+        username = str(uuid.uuid4())
+        request.session['username'] = username
 
+    print "user: %s\n" %username
     storage = Storage(CredentialModel, 'user', username, 'credential')
     storage.delete()  # Get rid of stale token, if any
     storage.put(credential)
